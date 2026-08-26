@@ -12,7 +12,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "CampusVault",
+  title: "Dronahub",
   description: "Academic resources for students",
 };
 
