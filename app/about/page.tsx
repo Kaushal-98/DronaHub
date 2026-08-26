@@ -1,13 +1,13 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
 };
 
-const floating = {
+const floating: Variants = {
   animate: {
     y: [0, -12, 0],
     rotate: [0, 3, 0],
@@ -22,9 +22,8 @@ const floating = {
 export default function AboutPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#f6f1e7] text-[#1c1a18]">
-      {/* BACKGROUND GRID */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.45]"
+        className="pointer-events-none fixed inset-0 opacity-[0.45]"
         style={{
           backgroundImage: `
             linear-gradient(#d9d1c3 1px, transparent 1px),
@@ -35,10 +34,7 @@ export default function AboutPage() {
       />
 
       <div className="relative mx-auto max-w-[1500px] px-5 py-6 md:px-10 md:py-10">
-
-        {/* HERO */}
         <section className="relative overflow-hidden rounded-[32px] border border-[#ded5c6] bg-[#f8f4eb]/80 px-7 py-12 md:px-14 md:py-16">
-
           <motion.div
             initial="hidden"
             animate="visible"
@@ -46,7 +42,6 @@ export default function AboutPage() {
             variants={fadeUp}
             className="grid items-center gap-12 lg:grid-cols-[1fr_1.05fr]"
           >
-            {/* LEFT */}
             <div className="relative z-10">
               <div className="mb-7 flex items-center gap-3">
                 <span className="text-[10px] font-bold tracking-[0.35em] text-[#cf623e]">
@@ -69,7 +64,6 @@ export default function AboutPage() {
                 access academic resources — all in one place.
               </p>
 
-              {/* STATS */}
               <div className="mt-10 grid max-w-lg grid-cols-2 gap-4">
                 <motion.div
                   whileHover={{ y: -5 }}
@@ -93,9 +87,7 @@ export default function AboutPage() {
               </div>
             </div>
 
-            {/* PHOTO SIDE */}
             <div className="relative flex min-h-[430px] items-end justify-center md:min-h-[540px]">
-              {/* ORANGE CIRCLE */}
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{
@@ -108,7 +100,6 @@ export default function AboutPage() {
 
               <div className="absolute top-[10%] h-[350px] w-[350px] rounded-full bg-[#ead7c8] md:h-[460px] md:w-[460px]" />
 
-              {/* PHOTO */}
               <motion.img
                 initial={{ opacity: 0, scale: 0.92, y: 30 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -118,7 +109,6 @@ export default function AboutPage() {
                 className="relative z-10 h-[430px] object-contain object-bottom md:h-[560px]"
               />
 
-              {/* FLOATING CARD */}
               <motion.div
                 variants={floating}
                 animate="animate"
@@ -127,13 +117,14 @@ export default function AboutPage() {
                 <p className="text-[10px] font-bold tracking-[0.25em] text-[#cf623e]">
                   KAUSHAL SHARMA
                 </p>
+
                 <p className="mt-2 text-sm font-medium text-[#70695f]">
                   Founder & Developer
                 </p>
+
                 <div className="mt-3 h-[2px] w-8 bg-[#cf623e]" />
               </motion.div>
 
-              {/* FLOATING ELEMENTS */}
               <FloatingCard
                 className="left-[2%] top-[15%]"
                 icon="📖"
@@ -155,10 +146,7 @@ export default function AboutPage() {
           </motion.div>
         </section>
 
-        {/* IDEA + STORY */}
         <section className="mt-6 grid gap-6 lg:grid-cols-[0.65fr_1.35fr]">
-
-          {/* IDEA */}
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -191,7 +179,6 @@ export default function AboutPage() {
             </div>
           </motion.div>
 
-          {/* WHY BUILT */}
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -221,7 +208,6 @@ export default function AboutPage() {
               />
             </div>
 
-            {/* TAGS */}
             <div className="mt-10 flex flex-wrap gap-3">
               {["PYQs", "Notes", "Syllabus", "Roadmaps"].map((item) => (
                 <span
@@ -235,11 +221,8 @@ export default function AboutPage() {
           </motion.div>
         </section>
 
-        {/* BUILT BY */}
         <section className="mt-6 rounded-[32px] border border-[#ded5c6] bg-white/70 p-7 md:p-10">
           <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
-
-            {/* PROFILE */}
             <div className="flex flex-col gap-7 sm:flex-row">
               <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-full border-2 border-[#cf623e]/50 bg-[#ead7c8]">
                 <img
@@ -290,7 +273,6 @@ export default function AboutPage() {
               </div>
             </div>
 
-            {/* STATS + TECH */}
             <div className="border-t border-[#ded5c6] pt-8 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
               <div className="grid grid-cols-3 divide-x divide-[#ded5c6]">
                 <Stat number="1" label="Mission" />
@@ -324,7 +306,6 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* SPECIAL THANKS */}
         <section className="mt-16">
           <div className="text-center">
             <p className="text-[10px] font-bold tracking-[0.35em] text-[#cf623e]">
@@ -360,7 +341,6 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* FINAL CTA */}
         <motion.section
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -374,7 +354,7 @@ export default function AboutPage() {
 
           <div className="relative max-w-2xl">
             <p className="text-[10px] font-bold tracking-[0.3em] text-[#cf623e]">
-              WHAT'S NEXT
+              WHAT&apos;S NEXT
             </p>
 
             <h2 className="mt-5 font-serif text-4xl md:text-6xl">
@@ -395,7 +375,6 @@ export default function AboutPage() {
           </div>
         </motion.section>
 
-        {/* FOOT NOTE */}
         <div className="py-10 text-center text-xs text-[#8a8177]">
           The best student resources should not disappear when one batch
           graduates.
@@ -404,8 +383,6 @@ export default function AboutPage() {
     </main>
   );
 }
-
-/* ================= COMPONENTS ================= */
 
 function FloatingCard({
   className,

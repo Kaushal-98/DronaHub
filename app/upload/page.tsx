@@ -134,6 +134,12 @@ export default function UploadPage() {
     setError("");
     setSuccess(false);
 
+    // IMPORTANT: Fixes "user is possibly null" TypeScript error
+    if (!user) {
+      setError("Please sign in before uploading a resource.");
+      return;
+    }
+
     if (!title.trim()) {
       setError("Please enter a resource title.");
       return;
