@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useUser } from "@/lib/useUser";
 
 const BRANCHES = [
+  "First Year Common",
   "CSE AI & IoT",
   "VLSI",
   "ME/AE",
@@ -62,6 +63,16 @@ export default function UploadPage() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
+
+  const availableSemesters =
+    branch === "First Year Common" ? [1, 2] : SEMESTERS;
+
+  const resourceLabel =
+    type === "pyq"
+      ? "PYQ"
+      : type === "notes"
+      ? "Notes"
+      : "Syllabus";
 
   if (userLoading) {
     return (
@@ -128,13 +139,51 @@ export default function UploadPage() {
     }
   }
 
+  function handleBranchChange(newBranch: string) {
+    setBranch(newBranch);
+
+    if (newBranch === "First Year Common" && semester > 2) {
+      setSemester(1);
+    }
+  }
+
+  function changeResourceType(newType: string) {
+    setType(newType);
+    setFile(null);
+    setDirectLink("");
+    setError("");
+    setSuccess(false);
+    setDragging(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function validateDirectLink() {
+    if (!directLink.trim()) {
+      return true;
+    }
+
+    try {
+      const url = new URL(directLink.trim());
+
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
 
     setError("");
     setSuccess(false);
 
-    // IMPORTANT: Fixes "user is possibly null" TypeScript error
     if (!user) {
       setError("Please sign in before uploading a resource.");
       return;
@@ -150,122 +199,104 @@ export default function UploadPage() {
       return;
     }
 
-    /*
-      PYQ:
-      At least one of these is required:
-      - Direct PDF link
-      - Uploaded PDF
-
-      Notes / Syllabus:
-      - PDF upload is required
-    */
-
-    if (type === "pyq" && !directLink.trim() && !file) {
+    // PYQ aur Notes ke liye file ya link me se kam se kam ek
+    if (
+      (type === "pyq" || type === "notes") &&
+      !file &&
+      !directLink.trim()
+    ) {
       setError(
-        "For PYQs, please add a PDF link, upload a PDF, or provide both."
+        `For ${resourceLabel}, please upload a PDF, add a link, or provide both.`
       );
       return;
     }
 
-    if (type !== "pyq" && !file) {
-      setError("Please choose a PDF file.");
+    // Syllabus ke liye sirf PDF required
+    if (type === "syllabus" && !file) {
+      setError("Please choose a PDF file for the syllabus.");
       return;
     }
 
-    if (directLink.trim()) {
-      try {
-        new URL(directLink.trim());
-      } catch {
-        setError("Please enter a valid PDF URL.");
-        return;
-      }
+    if (directLink.trim() && !validateDirectLink()) {
+      setError("Please enter a valid link starting with http:// or https://");
+      return;
     }
 
     setLoading(true);
 
     let uploadedPdfUrl: string | null = null;
 
-    /*
-      Upload PDF if a file was selected
-    */
-    if (file) {
-      const safeFileName = file.name.replace(/\s+/g, "-");
+    try {
+      if (file) {
+        const safeFileName = file.name
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9._-]/g, "");
 
-      const filePath = `${user.id}/${Date.now()}-${safeFileName}`;
+        const filePath = `${user.id}/${Date.now()}-${safeFileName}`;
 
-      const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
+          .from("resources")
+          .upload(filePath, file);
+
+        if (uploadError) {
+          setError(uploadError.message);
+          setLoading(false);
+          return;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from("resources")
+          .getPublicUrl(filePath);
+
+        uploadedPdfUrl = urlData.publicUrl;
+      }
+
+      const { error: insertError } = await supabase
         .from("resources")
-        .upload(filePath, file);
+        .insert({
+          title: title.trim(),
+          type,
+          branch,
+          semester,
+          subject: subject.trim(),
+          year: year ? parseInt(year) : null,
 
-      if (uploadError) {
+          // Uploaded PDF URL
+          file_url: uploadedPdfUrl,
+
+          // Google Drive / direct / other resource link
+          direct_link:
+            type === "syllabus"
+              ? null
+              : directLink.trim() || null,
+
+          uploaded_by: user.id,
+          status: "pending",
+        });
+
+      if (insertError) {
+        setError(insertError.message);
         setLoading(false);
-        setError(uploadError.message);
         return;
       }
 
-      const { data: urlData } = supabase.storage
-        .from("resources")
-        .getPublicUrl(filePath);
-
-      uploadedPdfUrl = urlData.publicUrl;
+      resetForm();
+      setSuccess(true);
+    } catch {
+      setError("Something went wrong while submitting the resource.");
     }
-
-    /*
-      Save resource in database
-
-      file_url:
-      Uploaded PDF
-
-      direct_link:
-      External PDF / Drive / website link
-    */
-    const { error: insertError } = await supabase
-      .from("resources")
-      .insert({
-        title: title.trim(),
-        type,
-        branch,
-        semester,
-        subject: subject.trim(),
-        year: year ? parseInt(year) : null,
-
-        file_url: uploadedPdfUrl,
-
-        direct_link: directLink.trim() || null,
-
-        uploaded_by: user.id,
-        status: "pending",
-      });
 
     setLoading(false);
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
-
-    resetForm();
-    setSuccess(true);
   }
 
   function resetForm() {
     setTitle("");
     setSubject("");
     setYear("");
+    setSemester(1);
     setFile(null);
     setDirectLink("");
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }
-
-  function changeResourceType(newType: string) {
-    setType(newType);
-    setFile(null);
-    setDirectLink("");
-    setError("");
-    setSuccess(false);
+    setDragging(false);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -435,20 +466,23 @@ export default function UploadPage() {
                   </div>
                 </motion.section>
 
-                {/* PYQ INFORMATION */}
-                {type === "pyq" && (
+                {/* FLEXIBILITY INFO */}
+                {(type === "pyq" || type === "notes") && (
                   <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="rounded-[26px] border border-[#f0d8cd] bg-[#fff6f1] p-6"
                   >
                     <p className="text-[10px] font-bold tracking-[0.25em] text-[#d6613f]">
-                      PYQ FLEXIBILITY
+                      {type === "pyq"
+                        ? "PYQ FLEXIBILITY"
+                        : "NOTES FLEXIBILITY"}
                     </p>
 
                     <p className="mt-3 text-sm leading-6 text-[#74695c]">
-                      For previous year question papers, you can paste a direct
-                      PDF link, upload the PDF file, or provide both.
+                      {type === "pyq"
+                        ? "You can paste a direct PDF link, upload the PDF file, or provide both."
+                        : "You can share a Google Drive link, direct PDF link, or upload the PDF file directly."}
                     </p>
                   </motion.div>
                 )}
@@ -480,6 +514,7 @@ export default function UploadPage() {
 
                   <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#eadfce] bg-[#f8f4eb] px-4 py-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#d6613f]" />
+
                     <span className="text-[9px] font-bold tracking-[0.16em] text-[#74695c]">
                       PENDING REVIEW
                     </span>
@@ -533,7 +568,7 @@ export default function UploadPage() {
 
                     <select
                       value={branch}
-                      onChange={(e) => setBranch(e.target.value)}
+                      onChange={(e) => handleBranchChange(e.target.value)}
                       className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition focus:border-[#d6613f] focus:bg-white"
                     >
                       {BRANCHES.map((item) => (
@@ -554,7 +589,7 @@ export default function UploadPage() {
                       }
                       className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition focus:border-[#d6613f] focus:bg-white"
                     >
-                      {SEMESTERS.map((item) => (
+                      {availableSemesters.map((item) => (
                         <option key={item} value={item}>
                           Semester {item}
                         </option>
@@ -573,7 +608,7 @@ export default function UploadPage() {
                       required
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      placeholder="e.g. Operating Systems"
+                      placeholder="e.g. Engineering Mathematics"
                       className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f] focus:bg-white focus:ring-4 focus:ring-[#d6613f]/5"
                     />
                   </div>
@@ -591,8 +626,8 @@ export default function UploadPage() {
                   </div>
                 </div>
 
-                {/* PYQ LINK + PDF */}
-                {type === "pyq" && (
+                {/* LINK + PDF FOR PYQ AND NOTES */}
+                {(type === "pyq" || type === "notes") && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -616,24 +651,34 @@ export default function UploadPage() {
                             </span>
 
                             <p className="text-[10px] font-bold tracking-[0.18em] text-[#d6613f]">
-                              DIRECT LINK
+                              RESOURCE LINK
                             </p>
                           </div>
 
                           <h3 className="mt-3 font-[var(--font-manrope)] text-base font-bold">
-                            Paste a PDF link
+                            {type === "notes"
+                              ? "Paste your notes link"
+                              : "Paste a PYQ link"}
                           </h3>
 
                           <p className="mt-1 text-xs leading-5 text-[#74695c]">
-                            Google Drive, direct PDF or original source.
+                            {type === "notes"
+                              ? "Google Drive, PDF link or any public study resource."
+                              : "Google Drive, direct PDF or original source."}
                           </p>
                         </div>
 
                         <input
                           type="url"
                           value={directLink}
-                          onChange={(e) => setDirectLink(e.target.value)}
-                          placeholder="https://example.com/file.pdf"
+                          onChange={(e) =>
+                            setDirectLink(e.target.value)
+                          }
+                          placeholder={
+                            type === "notes"
+                              ? "https://drive.google.com/..."
+                              : "https://example.com/file.pdf"
+                          }
                           className="w-full rounded-xl border border-[#e6dfd0] bg-white px-4 py-3.5 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f]"
                         />
                       </div>
@@ -656,7 +701,9 @@ export default function UploadPage() {
                           </h3>
 
                           <p className="mt-1 text-xs leading-5 text-[#74695c]">
-                            Upload the original question paper directly.
+                            {type === "notes"
+                              ? "Upload your notes directly to DronaHub."
+                              : "Upload the original question paper directly."}
                           </p>
                         </div>
 
@@ -671,7 +718,9 @@ export default function UploadPage() {
                         />
 
                         <div
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={() =>
+                            fileInputRef.current?.click()
+                          }
                           onDragOver={(e) => {
                             e.preventDefault();
                             setDragging(true);
@@ -680,7 +729,9 @@ export default function UploadPage() {
                           onDrop={(e) => {
                             e.preventDefault();
                             setDragging(false);
-                            handleFile(e.dataTransfer.files?.[0] || null);
+                            handleFile(
+                              e.dataTransfer.files?.[0] || null
+                            );
                           }}
                           className={`cursor-pointer rounded-xl border border-dashed px-4 py-4 text-center transition ${
                             dragging
@@ -714,7 +765,9 @@ export default function UploadPage() {
                             </>
                           ) : (
                             <>
-                              <span className="text-xl text-[#d6613f]">+</span>
+                              <span className="text-xl text-[#d6613f]">
+                                +
+                              </span>
 
                               <p className="mt-2 text-sm font-bold text-[#14110f]">
                                 Drop PDF here
@@ -736,14 +789,14 @@ export default function UploadPage() {
                   </motion.div>
                 )}
 
-                {/* NOTES + SYLLABUS PDF UPLOAD */}
-                {type !== "pyq" && (
+                {/* SYLLABUS PDF ONLY */}
+                {type === "syllabus" && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-7"
                   >
-                    <FieldLabel label="UPLOAD PDF" />
+                    <FieldLabel label="UPLOAD SYLLABUS PDF" />
 
                     <input
                       ref={fileInputRef}
@@ -765,7 +818,9 @@ export default function UploadPage() {
                       onDrop={(e) => {
                         e.preventDefault();
                         setDragging(false);
-                        handleFile(e.dataTransfer.files?.[0] || null);
+                        handleFile(
+                          e.dataTransfer.files?.[0] || null
+                        );
                       }}
                       className={`cursor-pointer rounded-[24px] border border-dashed p-8 text-center transition ${
                         dragging
@@ -808,7 +863,7 @@ export default function UploadPage() {
                           </div>
 
                           <p className="mt-4 font-[var(--font-manrope)] text-base font-bold text-[#14110f]">
-                            Drop your PDF here
+                            Drop your syllabus PDF here
                           </p>
 
                           <p className="mt-2 text-xs text-[#74695c]">
