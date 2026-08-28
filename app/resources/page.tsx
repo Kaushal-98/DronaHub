@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 
+type Profile = {
+  full_name: string | null;
+};
+
 type Resource = {
   id: string;
   title: string;
@@ -15,9 +19,12 @@ type Resource = {
   file_url: string | null;
   direct_link: string | null;
   status: string;
+  uploaded_by: string | null;
+  profiles: Profile | null;
 };
 
 type Step = "branch" | "semester" | "subject" | "papers";
+
 type ResourceType = "pyq" | "notes" | "syllabus";
 
 const PRIORITY_BRANCHES = [
@@ -52,12 +59,19 @@ export default function ResourcesPage() {
 
       const { data, error } = await supabase
         .from("resources")
-        .select("*")
+        .select(`
+          *,
+          profiles (
+            full_name
+          )
+        `)
         .eq("status", "approved")
         .in("type", ["pyq", "notes", "syllabus"]);
 
       if (!error && data) {
         setAll(data as Resource[]);
+      } else if (error) {
+        console.error("Error loading resources:", error);
       }
 
       setLoading(false);
@@ -73,8 +87,7 @@ export default function ResourcesPage() {
   /*
     Always show First Year Common.
 
-    Other branches appear when they have
-    approved resources.
+    Other branches appear when they have approved resources.
   */
   const branches = Array.from(
     new Set([
@@ -99,8 +112,8 @@ export default function ResourcesPage() {
   });
 
   /*
-    First Year Common always shows
-    Semester 1 and Semester 2.
+    For First Year Common,
+    always show Semester 1 and Semester 2.
   */
   const semesters = branch
     ? branch === "First Year Common"
@@ -189,14 +202,12 @@ export default function ResourcesPage() {
       setSemester(null);
       setSubject(null);
       setStep("branch");
-      return;
     }
 
     if (step === "subject") {
       setSemester(null);
       setSubject(null);
       setStep("semester");
-      return;
     }
 
     if (step === "papers") {
@@ -205,74 +216,13 @@ export default function ResourcesPage() {
     }
   }
 
-  /*
-    Converts common Google Drive sharing links
-    into preview links so they can open inside
-    the DronaHub viewer.
-  */
-  function getPreviewUrl(url: string) {
-    try {
-      const parsedUrl = new URL(url);
-
-      const isGoogleDrive =
-        parsedUrl.hostname.includes("drive.google.com") ||
-        parsedUrl.hostname.includes("docs.google.com");
-
-      if (!isGoogleDrive) {
-        return url;
-      }
-
-      /*
-        Format:
-        https://drive.google.com/file/d/FILE_ID/view
-      */
-      const fileMatch = url.match(/\/file\/d\/([^/]+)/);
-
-      if (fileMatch?.[1]) {
-        return `https://drive.google.com/file/d/${fileMatch[1]}/preview`;
-      }
-
-      /*
-        Format:
-        https://drive.google.com/open?id=FILE_ID
-      */
-      const fileId = parsedUrl.searchParams.get("id");
-
-      if (fileId) {
-        return `https://drive.google.com/file/d/${fileId}/preview`;
-      }
-
-      /*
-        Google Docs / other shared preview URLs
-      */
-      return url;
-    } catch {
-      return url;
-    }
-  }
-
   function openResource(resource: Resource) {
-    /*
-      Prefer uploaded PDF.
-      Otherwise use shared direct link.
-    */
-    const resourceUrl =
-      resource.file_url || resource.direct_link;
+    const url = resource.file_url || resource.direct_link;
 
-    if (!resourceUrl) {
-      return;
-    }
+    if (!url) return;
 
-    const previewUrl = getPreviewUrl(resourceUrl);
-
-    setViewerUrl(previewUrl);
+    setViewerUrl(url);
     setViewerTitle(resource.title);
-  }
-
-  function openInNewTab() {
-    if (!viewerUrl) return;
-
-    window.open(viewerUrl, "_blank", "noopener,noreferrer");
   }
 
   const resourceName =
@@ -294,7 +244,7 @@ export default function ResourcesPage() {
   const subtitle =
     step === "branch"
       ? resourceType === "notes"
-        ? "Community notes, Google Drive resources and study material shared by students."
+        ? "Community notes, built by students for students."
         : `Select your branch to browse ${resourceName.toLowerCase()}.`
       : step === "semester"
       ? branch === "First Year Common"
@@ -386,7 +336,7 @@ export default function ResourcesPage() {
 
             {/* BREADCRUMB */}
             {step !== "branch" && (
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wide text-[#74695c]">
+              <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[#74695c]">
                 <button
                   onClick={() => {
                     setBranch(null);
@@ -472,8 +422,7 @@ export default function ResourcesPage() {
                   className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
                 >
                   {branches.map((item, index) => {
-                    const isFirstYear =
-                      item === "First Year Common";
+                    const isFirstYear = item === "First Year Common";
 
                     return (
                       <motion.button
@@ -493,9 +442,7 @@ export default function ResourcesPage() {
 
                         <div className="flex h-full flex-col justify-between">
                           <span className="text-xs font-bold tracking-[0.2em] text-[#d6613f]">
-                            {isFirstYear
-                              ? "COMMON YEAR"
-                              : "BRANCH"}
+                            {isFirstYear ? "COMMON YEAR" : "BRANCH"}
                           </span>
 
                           <div>
@@ -592,9 +539,7 @@ export default function ResourcesPage() {
                   ))}
 
                   {subjects.length === 0 && (
-                    <EmptyState
-                      text="No subjects available for this semester yet."
-                    />
+                    <EmptyState text="No subjects available for this semester yet." />
                   )}
                 </motion.div>
               )}
@@ -608,67 +553,52 @@ export default function ResourcesPage() {
                   exit={{ opacity: 0, y: -15 }}
                   className="overflow-hidden rounded-[24px] border border-[#ded6c8] bg-white"
                 >
-                  {resources.map((resource, index) => {
-                    const hasLink = Boolean(
-                      resource.file_url || resource.direct_link
-                    );
+                  {resources.map((resource, index) => (
+                    <motion.div
+                      key={resource.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="group flex flex-col gap-4 border-b border-[#ece6da] px-6 py-5 last:border-b-0 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div className="flex items-center gap-6">
+                        <span className="min-w-[50px] text-sm font-bold text-[#d6613f]">
+                          {resource.year || "—"}
+                        </span>
 
-                    const sourceLabel = resource.file_url
-                      ? "PDF"
-                      : resource.direct_link?.includes(
-                          "drive.google.com"
-                        )
-                      ? "GOOGLE DRIVE"
-                      : "LINK";
+                        <div>
+                          <h3 className="font-[var(--font-manrope)] text-base font-bold text-[#14110f] md:text-lg">
+                            {resource.title}
+                          </h3>
 
-                    return (
-                      <motion.div
-                        key={resource.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="group flex flex-col gap-4 border-b border-[#ece6da] px-6 py-5 last:border-b-0 md:flex-row md:items-center md:justify-between"
-                      >
-                        <div className="flex items-center gap-6">
-                          <span className="min-w-[50px] text-sm font-bold text-[#d6613f]">
-                            {resource.year || "—"}
-                          </span>
+                          <p className="mt-1 text-xs text-[#74695c]">
+                            {resourceType === "pyq"
+                              ? "Previous Year Question Paper"
+                              : resourceType === "notes"
+                              ? "Study Notes"
+                              : "Syllabus Document"}
+                          </p>
 
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-[var(--font-manrope)] text-base font-bold text-[#14110f] md:text-lg">
-                                {resource.title}
-                              </h3>
-
-                              {resourceType === "notes" &&
-                                resource.direct_link &&
-                                !resource.file_url && (
-                                  <span className="rounded-full bg-[#fff1eb] px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-[#d6613f]">
-                                    {sourceLabel}
-                                  </span>
-                                )}
-                            </div>
-
-                            <p className="mt-1 text-xs text-[#74695c]">
-                              {resourceType === "pyq"
-                                ? "Previous Year Question Paper"
-                                : resourceType === "notes"
-                                ? "Study Notes"
-                                : "Syllabus Document"}
+                          {/* UPLOADER NAME */}
+                          {resource.profiles?.full_name && (
+                            <p className="mt-2 text-[11px] font-medium text-[#a89d8e]">
+                              Uploaded by{" "}
+                              <span className="font-semibold text-[#74695c]">
+                                {resource.profiles.full_name}
+                              </span>
                             </p>
-                          </div>
+                          )}
                         </div>
+                      </div>
 
-                        <button
-                          onClick={() => openResource(resource)}
-                          disabled={!hasLink}
-                          className="w-fit rounded-full border border-[#d8d0c0] px-5 py-2.5 text-xs font-bold tracking-wide text-[#14110f] transition hover:border-[#14110f] hover:bg-[#14110f] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {hasLink ? "VIEW →" : "UNAVAILABLE"}
-                        </button>
-                      </motion.div>
-                    );
-                  })}
+                      <button
+                        onClick={() => openResource(resource)}
+                        className="w-fit rounded-full border border-[#d8d0c0] px-5 py-2.5 text-xs font-bold tracking-wide text-[#14110f] transition hover:border-[#14110f] hover:bg-[#14110f] hover:text-white"
+                      >
+                        VIEW →
+                      </button>
+                    </motion.div>
+                  ))}
 
                   {resources.length === 0 && (
                     <EmptyState
@@ -724,21 +654,9 @@ export default function ResourcesPage() {
             />
 
             <motion.div
-              initial={{
-                opacity: 0,
-                y: 40,
-                scale: 0.94,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-                scale: 1,
-              }}
-              exit={{
-                opacity: 0,
-                y: 30,
-                scale: 0.96,
-              }}
+              initial={{ opacity: 0, y: 40, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.96 }}
               transition={{
                 type: "spring",
                 stiffness: 180,
@@ -766,17 +684,16 @@ export default function ResourcesPage() {
 
               <div className="px-7 py-7">
                 <p className="max-w-md text-sm leading-7 text-[#74695c]">
-                  Our notes collection is still growing. You can contribute
-                  using a PDF upload or simply share a Google Drive link.
-                  Every useful contribution helps students.
+                  Our notes collection is still growing. Upload your notes and
+                  help make DronaHub more useful for every student.
                 </p>
 
                 <div className="mt-7 space-y-3">
                   {[
                     [
                       "01",
-                      "Upload or share",
-                      "Upload notes or paste a Google Drive link.",
+                      "Upload your notes",
+                      "Share useful study material.",
                     ],
                     [
                       "02",
@@ -791,14 +708,8 @@ export default function ResourcesPage() {
                   ].map(([number, heading, text], index) => (
                     <motion.div
                       key={number}
-                      initial={{
-                        opacity: 0,
-                        x: -20,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                      }}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
                       transition={{
                         delay: 0.2 + index * 0.12,
                       }}
@@ -823,18 +734,14 @@ export default function ResourcesPage() {
 
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <button
-                    onClick={() =>
-                      setShowNotesPopup(false)
-                    }
+                    onClick={() => setShowNotesPopup(false)}
                     className="rounded-full bg-[#d6613f] px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#bf5133]"
                   >
                     Got it, let&apos;s explore →
                   </button>
 
                   <button
-                    onClick={() =>
-                      setShowNotesPopup(false)
-                    }
+                    onClick={() => setShowNotesPopup(false)}
                     className="px-4 py-3 text-xs font-semibold text-[#74695c] transition hover:text-[#14110f]"
                   >
                     Maybe later
@@ -856,7 +763,7 @@ export default function ResourcesPage() {
         )}
       </AnimatePresence>
 
-      {/* RESOURCE VIEWER */}
+      {/* PDF VIEWER */}
       <AnimatePresence>
         {viewerUrl && (
           <motion.div
@@ -867,62 +774,36 @@ export default function ResourcesPage() {
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           >
             <motion.div
-              initial={{
-                opacity: 0,
-                scale: 0.97,
-              }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-              }}
-              exit={{
-                opacity: 0,
-                scale: 0.97,
-              }}
-              onClick={(event) =>
-                event.stopPropagation()
-              }
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              onClick={(event) => event.stopPropagation()}
               className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[24px] bg-white"
             >
-              {/* VIEWER HEADER */}
-              <div className="flex items-center justify-between gap-4 border-b border-[#e6dfd0] bg-[#f3eee1] px-5 py-4">
-                <div className="min-w-0">
+              <div className="flex items-center justify-between border-b border-[#e6dfd0] bg-[#f3eee1] px-5 py-4">
+                <div>
                   <p className="text-[10px] font-bold tracking-[0.2em] text-[#d6613f]">
                     DRONAHUB VIEWER
                   </p>
 
-                  <p className="mt-1 max-w-[60vw] truncate text-sm font-bold text-[#14110f]">
+                  <p className="mt-1 max-w-[70vw] truncate text-sm font-bold text-[#14110f]">
                     {viewerTitle}
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={openInNewTab}
-                    className="rounded-full border border-[#d8d0c0] bg-white px-4 py-2 text-[10px] font-bold tracking-wide text-[#14110f] transition hover:border-[#d6613f] hover:text-[#d6613f]"
-                  >
-                    OPEN ↗
-                  </button>
-
-                  <button
-                    onClick={() => setViewerUrl(null)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-[#14110f] text-lg text-white transition hover:bg-[#d6613f]"
-                    aria-label="Close viewer"
-                  >
-                    ×
-                  </button>
-                </div>
+                <button
+                  onClick={() => setViewerUrl(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[#14110f] text-lg text-white transition hover:bg-[#d6613f]"
+                >
+                  ×
+                </button>
               </div>
 
-              {/* VIEWER */}
-              <div className="relative flex-1 bg-[#f3eee1]">
-                <iframe
-                  src={viewerUrl}
-                  title={viewerTitle}
-                  className="h-full w-full"
-                  allow="autoplay"
-                />
-              </div>
+              <iframe
+                src={viewerUrl}
+                title={viewerTitle}
+                className="h-full w-full flex-1"
+              />
             </motion.div>
           </motion.div>
         )}

@@ -42,6 +42,17 @@ export default function Hero() {
         },
       });
 
+      if (
+        !boyRef.current ||
+        !cloudRef.current ||
+        !welcomeRef.current ||
+        !contentRef.current ||
+        !browseRef.current ||
+        !uploadRef.current
+      ) {
+        return;
+      }
+
       gsap.set(boyRef.current, {
         opacity: 0,
         x: 100,
@@ -113,28 +124,16 @@ export default function Hero() {
         "-=0.1"
       );
 
-      tl.call(() => {
-        setThoughtIndex(0);
-      });
-
+      tl.call(() => setThoughtIndex(0));
       tl.to({}, { duration: 1.3 });
 
-      tl.call(() => {
-        setThoughtIndex(1);
-      });
-
+      tl.call(() => setThoughtIndex(1));
       tl.to({}, { duration: 1.3 });
 
-      tl.call(() => {
-        setThoughtIndex(2);
-      });
-
+      tl.call(() => setThoughtIndex(2));
       tl.to({}, { duration: 1.3 });
 
-      tl.call(() => {
-        setThoughtIndex(3);
-      });
-
+      tl.call(() => setThoughtIndex(3));
       tl.to({}, { duration: 1.2 });
 
       tl.to(cloudRef.current, {
@@ -194,7 +193,6 @@ export default function Hero() {
       ref={heroRef}
       className="relative left-1/2 right-1/2 -mx-[50vw] min-h-[720px] w-screen overflow-hidden bg-[#f3eee1]"
     >
-      {/* BACKGROUND COLLEGE IMAGE */}
       <div className="absolute inset-0">
         <img
           src="/college/hero-building.jpg"
@@ -202,18 +200,13 @@ export default function Hero() {
           className="h-full w-full object-cover object-center"
         />
 
-        {/* LEFT SIDE ONLY - TEXT READABILITY */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#f3eee1]/95 via-[#f3eee1]/55 to-transparent md:via-[#f3eee1]/20" />
 
-        {/* BOTTOM SOFT FADE */}
         <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#f3eee1]/45 to-transparent" />
       </div>
 
-      {/* MAIN CONTENT */}
       <div className="relative z-20 mx-auto flex min-h-[720px] w-full max-w-[1500px] items-center px-8 py-16 md:px-14 lg:px-20">
-        {/* LEFT CONTENT */}
         <div className="relative z-30 w-full max-w-[650px]">
-          {/* WELCOME INTRO */}
           <div
             ref={welcomeRef}
             className="pointer-events-none absolute left-0 top-0"
@@ -232,15 +225,12 @@ export default function Hero() {
             </h2>
           </div>
 
-          {/* FINAL CONTENT */}
           <div ref={contentRef}>
-            {/* LABEL */}
             <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#fbe4d8] px-4 py-2 text-xs font-semibold text-[#d6613f] shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-[#d6613f]" />
               Built by seniors. Kept alive for you.
             </span>
 
-            {/* HEADING */}
             <h1 className="mb-6 max-w-[620px] font-[var(--font-manrope)] text-5xl font-bold leading-[0.98] tracking-tight text-[#14110f] md:text-6xl lg:text-7xl">
               We find your{" "}
               <span className="font-['Instrument_Serif'] font-normal italic text-[#d6613f]">
@@ -253,14 +243,12 @@ export default function Hero() {
               <span className="text-[#d6613f]">.</span>
             </h1>
 
-            {/* DESCRIPTION */}
             <p className="mb-8 max-w-[520px] text-base leading-relaxed text-[#5f574e] md:text-[17px]">
               DronaHub is a student-run library of PYQs, notes, roadmaps and
               useful resources — built by seniors and kept alive by students.
             </p>
           </div>
 
-          {/* BUTTONS */}
           <div className="flex flex-wrap items-center gap-4">
             <a
               ref={browseRef}
@@ -287,31 +275,25 @@ export default function Hero() {
             </a>
           </div>
 
-          {/* SMALL INFO */}
           <div className="mt-8 flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f574e]">
             <span>PYQs</span>
-
             <span className="h-1 w-1 rounded-full bg-[#d6613f]" />
 
             <span>Notes</span>
-
             <span className="h-1 w-1 rounded-full bg-[#d6613f]" />
 
             <span>Roadmaps</span>
-
             <span className="h-1 w-1 rounded-full bg-[#d6613f]" />
 
             <span>Study Tools</span>
           </div>
         </div>
 
-        {/* BOY */}
         <div
           ref={boyRef}
           className="pointer-events-none absolute bottom-0 right-[2%] z-20 flex w-[38%] min-w-[360px] items-end justify-end md:w-[40%] lg:w-[42%]"
         >
           <div className="relative w-full">
-            {/* THOUGHT CLOUD */}
             <div
               ref={cloudRef}
               className="absolute right-[32%] top-[5%] z-30 w-[250px] md:w-[290px]"
@@ -331,19 +313,16 @@ export default function Hero() {
                   <span className="h-1.5 w-1.5 rounded-full bg-[#d6613f]/40" />
                 </div>
 
-                {/* CLOUD TAIL */}
                 <div className="absolute -bottom-4 right-12 h-8 w-8 rotate-45 border-b-2 border-r-2 border-[#8b735f] bg-[#f8f5ee]" />
               </div>
             </div>
 
-            {/* BOY IMAGE */}
             <img
               src="/college/dronahub-boy.png"
               alt="DronaHub student"
               className="relative z-20 ml-auto h-auto w-full max-w-[540px] object-contain object-bottom drop-shadow-2xl"
             />
 
-            {/* DECORATION */}
             <div className="absolute bottom-[16%] right-[5%] -z-10 h-28 w-28 rounded-full border border-[#d6613f]/30 md:h-36 md:w-36" />
 
             <div className="absolute bottom-[25%] right-[25%] -z-10 h-3 w-3 rounded-full bg-[#d6613f]" />
@@ -351,7 +330,6 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* BOTTOM BORDER */}
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-30 border-t border-[#14110f]/10" />
     </section>
   );
