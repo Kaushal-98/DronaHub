@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/lib/useUser";
@@ -51,9 +51,15 @@ export default function UploadPage() {
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState("pyq");
+
   const [branch, setBranch] = useState("CSE");
   const [semester, setSemester] = useState(1);
+
   const [subject, setSubject] = useState("");
+  const [newSubject, setNewSubject] = useState(false);
+  const [existingSubjects, setExistingSubjects] = useState<string[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+
   const [year, setYear] = useState("");
 
   const [file, setFile] = useState<File | null>(null);
@@ -73,6 +79,53 @@ export default function UploadPage() {
       : type === "notes"
       ? "Notes"
       : "Syllabus";
+
+  /*
+   * LOAD EXISTING SUBJECTS
+   *
+   * Branch + semester select karte hi database se
+   * already available subjects load honge.
+   *
+   * Ye list PYQ / Notes / Syllabus tino types se aayegi.
+   */
+  useEffect(() => {
+    async function loadExistingSubjects() {
+      if (!branch || !semester) {
+        setExistingSubjects([]);
+        return;
+      }
+
+      setSubjectsLoading(true);
+
+      const { data, error } = await supabase
+        .from("resources")
+        .select("subject")
+        .eq("branch", branch)
+        .eq("semester", semester)
+        .eq("status", "approved");
+
+      if (!error && data) {
+        const subjects = Array.from(
+          new Set(
+            data
+              .map((item) => item.subject?.trim())
+              .filter(
+                (item): item is string =>
+                  Boolean(item)
+              )
+          )
+        ).sort((a, b) => a.localeCompare(b));
+
+        setExistingSubjects(subjects);
+      } else {
+        setExistingSubjects([]);
+      }
+
+      setSubjectsLoading(false);
+    }
+
+    loadExistingSubjects();
+  }, [branch, semester]);
 
   if (userLoading) {
     return (
@@ -142,15 +195,27 @@ export default function UploadPage() {
   function handleBranchChange(newBranch: string) {
     setBranch(newBranch);
 
+    setSubject("");
+    setNewSubject(false);
+
     if (newBranch === "First Year Common" && semester > 2) {
       setSemester(1);
     }
   }
 
+  function handleSemesterChange(newSemester: number) {
+    setSemester(newSemester);
+
+    setSubject("");
+    setNewSubject(false);
+  }
+
   function changeResourceType(newType: string) {
     setType(newType);
+
     setFile(null);
     setDirectLink("");
+
     setError("");
     setSuccess(false);
     setDragging(false);
@@ -168,7 +233,10 @@ export default function UploadPage() {
     try {
       const url = new URL(directLink.trim());
 
-      if (url.protocol !== "http:" && url.protocol !== "https:") {
+      if (
+        url.protocol !== "http:" &&
+        url.protocol !== "https:"
+      ) {
         return false;
       }
 
@@ -195,11 +263,14 @@ export default function UploadPage() {
     }
 
     if (!subject.trim()) {
-      setError("Please enter a subject.");
+      setError("Please select an existing subject or create a new subject.");
       return;
     }
 
-    // PYQ aur Notes ke liye file ya link me se kam se kam ek
+    /*
+     * PYQ + NOTES
+     * File OR link OR both
+     */
     if (
       (type === "pyq" || type === "notes") &&
       !file &&
@@ -211,14 +282,19 @@ export default function UploadPage() {
       return;
     }
 
-    // Syllabus ke liye sirf PDF required
+    /*
+     * SYLLABUS
+     * PDF required
+     */
     if (type === "syllabus" && !file) {
       setError("Please choose a PDF file for the syllabus.");
       return;
     }
 
     if (directLink.trim() && !validateDirectLink()) {
-      setError("Please enter a valid link starting with http:// or https://");
+      setError(
+        "Please enter a valid link starting with http:// or https://"
+      );
       return;
     }
 
@@ -227,6 +303,9 @@ export default function UploadPage() {
     let uploadedPdfUrl: string | null = null;
 
     try {
+      /*
+       * UPLOAD PDF TO SUPABASE STORAGE
+       */
       if (file) {
         const safeFileName = file.name
           .replace(/\s+/g, "-")
@@ -251,6 +330,13 @@ export default function UploadPage() {
         uploadedPdfUrl = urlData.publicUrl;
       }
 
+      /*
+       * INSERT RESOURCE
+       *
+       * Same branch + semester + subject hone par
+       * /resources page mein ye same subject ke andar
+       * show hoga.
+       */
       const { error: insertError } = await supabase
         .from("resources")
         .insert({
@@ -261,10 +347,8 @@ export default function UploadPage() {
           subject: subject.trim(),
           year: year ? parseInt(year) : null,
 
-          // Uploaded PDF URL
           file_url: uploadedPdfUrl,
 
-          // Google Drive / direct / other resource link
           direct_link:
             type === "syllabus"
               ? null
@@ -283,7 +367,9 @@ export default function UploadPage() {
       resetForm();
       setSuccess(true);
     } catch {
-      setError("Something went wrong while submitting the resource.");
+      setError(
+        "Something went wrong while submitting the resource."
+      );
     }
 
     setLoading(false);
@@ -292,8 +378,11 @@ export default function UploadPage() {
   function resetForm() {
     setTitle("");
     setSubject("");
+    setNewSubject(false);
     setYear("");
+
     setSemester(1);
+
     setFile(null);
     setDirectLink("");
     setDragging(false);
@@ -378,7 +467,9 @@ export default function UploadPage() {
                         <button
                           key={item.value}
                           type="button"
-                          onClick={() => changeResourceType(item.value)}
+                          onClick={() =>
+                            changeResourceType(item.value)
+                          }
                           className={`group flex w-full items-center justify-between rounded-2xl border p-4 text-left transition-all duration-300 ${
                             active
                               ? "border-[#d6613f] bg-[#fff3ed] shadow-[0_8px_25px_rgba(214,97,63,0.08)]"
@@ -555,8 +646,10 @@ export default function UploadPage() {
                     type="text"
                     required
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Data Structures Mid-Sem 2024"
+                    onChange={(e) =>
+                      setTitle(e.target.value)
+                    }
+                    placeholder="e.g. Mathematics-1 Sessional Paper 2024"
                     className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f] focus:bg-white focus:ring-4 focus:ring-[#d6613f]/5"
                   />
                 </div>
@@ -568,7 +661,9 @@ export default function UploadPage() {
 
                     <select
                       value={branch}
-                      onChange={(e) => handleBranchChange(e.target.value)}
+                      onChange={(e) =>
+                        handleBranchChange(e.target.value)
+                      }
                       className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition focus:border-[#d6613f] focus:bg-white"
                     >
                       {BRANCHES.map((item) => (
@@ -585,7 +680,9 @@ export default function UploadPage() {
                     <select
                       value={semester}
                       onChange={(e) =>
-                        setSemester(parseInt(e.target.value))
+                        handleSemesterChange(
+                          parseInt(e.target.value)
+                        )
                       }
                       className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition focus:border-[#d6613f] focus:bg-white"
                     >
@@ -600,28 +697,92 @@ export default function UploadPage() {
 
                 {/* SUBJECT + YEAR */}
                 <div className="mb-7 grid gap-4 md:grid-cols-[1fr_190px]">
+                  {/* SUBJECT */}
                   <div>
                     <FieldLabel label="SUBJECT" />
 
-                    <input
-                      type="text"
-                      required
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      placeholder="e.g. Engineering Mathematics"
-                      className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f] focus:bg-white focus:ring-4 focus:ring-[#d6613f]/5"
-                    />
+                    {!newSubject ? (
+                      <select
+                        value={subject}
+                        required
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          if (value === "__new_subject__") {
+                            setSubject("");
+                            setNewSubject(true);
+                          } else {
+                            setSubject(value);
+                          }
+                        }}
+                        disabled={
+                          !branch ||
+                          !semester ||
+                          subjectsLoading
+                        }
+                        className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition focus:border-[#d6613f] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="">
+                          {subjectsLoading
+                            ? "Loading subjects..."
+                            : existingSubjects.length > 0
+                            ? "Select an existing subject"
+                            : "No subjects yet — create one"}
+                        </option>
+
+                        {existingSubjects.map((item) => (
+                          <option
+                            key={item}
+                            value={item}
+                          >
+                            {item}
+                          </option>
+                        ))}
+
+                        <option value="__new_subject__">
+                          ＋ New Subject
+                        </option>
+                      </select>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          value={subject}
+                          onChange={(e) =>
+                            setSubject(e.target.value)
+                          }
+                          placeholder="e.g. Mathematics-1"
+                          className="w-full rounded-2xl border border-[#d6613f] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:bg-white focus:ring-4 focus:ring-[#d6613f]/5"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubject("");
+                            setNewSubject(false);
+                          }}
+                          className="text-[10px] font-bold tracking-[0.16em] text-[#d6613f] hover:underline"
+                        >
+                          ← SELECT EXISTING SUBJECT
+                        </button>
+                      </div>
+                    )}
                   </div>
 
+                  {/* YEAR */}
                   <div>
                     <FieldLabel label="YEAR (OPTIONAL)" />
 
                     <input
                       type="number"
                       value={year}
-                      onChange={(e) => setYear(e.target.value)}
+                      onChange={(e) =>
+                        setYear(e.target.value)
+                      }
                       placeholder="2024"
-                      className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f] focus:bg-white"
+                      className="w-full rounded-2xl border border-[#e6dfd0] bg-[#fcfaf6] px-5 py-4 text-sm text-[#14110f] outline-none transition placeholder:text-[#aaa195] focus:border-[#d6613f] focus:bg-white focus:ring-4 focus:ring-[#d6613f]/5"
                     />
                   </div>
                 </div>
@@ -672,7 +833,9 @@ export default function UploadPage() {
                           type="url"
                           value={directLink}
                           onChange={(e) =>
-                            setDirectLink(e.target.value)
+                            setDirectLink(
+                              e.target.value
+                            )
                           }
                           placeholder={
                             type === "notes"
@@ -713,7 +876,10 @@ export default function UploadPage() {
                           accept="application/pdf"
                           className="hidden"
                           onChange={(e) =>
-                            handleFile(e.target.files?.[0] || null)
+                            handleFile(
+                              e.target.files?.[0] ||
+                                null
+                            )
                           }
                         />
 
@@ -725,12 +891,16 @@ export default function UploadPage() {
                             e.preventDefault();
                             setDragging(true);
                           }}
-                          onDragLeave={() => setDragging(false)}
+                          onDragLeave={() =>
+                            setDragging(false)
+                          }
                           onDrop={(e) => {
                             e.preventDefault();
                             setDragging(false);
+
                             handleFile(
-                              e.dataTransfer.files?.[0] || null
+                              e.dataTransfer.files?.[0] ||
+                                null
                             );
                           }}
                           className={`cursor-pointer rounded-xl border border-dashed px-4 py-4 text-center transition ${
@@ -748,8 +918,12 @@ export default function UploadPage() {
                               </p>
 
                               <p className="mt-1 text-xs text-[#74695c]">
-                                {(file.size / 1024 / 1024).toFixed(2)} MB · PDF
-                                ready
+                                {(
+                                  file.size /
+                                  1024 /
+                                  1024
+                                ).toFixed(2)}{" "}
+                                MB · PDF ready
                               </p>
 
                               <button
@@ -804,22 +978,30 @@ export default function UploadPage() {
                       accept="application/pdf"
                       className="hidden"
                       onChange={(e) =>
-                        handleFile(e.target.files?.[0] || null)
+                        handleFile(
+                          e.target.files?.[0] || null
+                        )
                       }
                     />
 
                     <div
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() =>
+                        fileInputRef.current?.click()
+                      }
                       onDragOver={(e) => {
                         e.preventDefault();
                         setDragging(true);
                       }}
-                      onDragLeave={() => setDragging(false)}
+                      onDragLeave={() =>
+                        setDragging(false)
+                      }
                       onDrop={(e) => {
                         e.preventDefault();
                         setDragging(false);
+
                         handleFile(
-                          e.dataTransfer.files?.[0] || null
+                          e.dataTransfer.files?.[0] ||
+                            null
                         );
                       }}
                       className={`cursor-pointer rounded-[24px] border border-dashed p-8 text-center transition ${
@@ -841,8 +1023,12 @@ export default function UploadPage() {
                           </p>
 
                           <p className="mt-2 text-xs text-[#74695c]">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB · Ready to
-                            upload
+                            {(
+                              file.size /
+                              1024 /
+                              1024
+                            ).toFixed(2)}{" "}
+                            MB · Ready to upload
                           </p>
 
                           <button
@@ -929,9 +1115,13 @@ function GuideRow({
       </span>
 
       <div>
-        <p className="text-sm font-bold text-[#14110f]">{title}</p>
+        <p className="text-sm font-bold text-[#14110f]">
+          {title}
+        </p>
 
-        <p className="mt-1 text-xs leading-5 text-[#74695c]">{text}</p>
+        <p className="mt-1 text-xs leading-5 text-[#74695c]">
+          {text}
+        </p>
       </div>
     </div>
   );
